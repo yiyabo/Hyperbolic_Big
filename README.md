@@ -1,24 +1,34 @@
-# 蛋白质相互作用预测：层次化特征建模框架
+# 蛋白质相互作用预测：PLM + RAG + 图小波 × 洛伦兹 GNN 框架
 
 ## 项目概述
 
-本项目实现了一个用于蛋白质相互作用预测的层次化特征工程与建模框架，通过多步骤、系统化的特征工程，主动地为每个蛋白质构建蕴含多重层次结构的特征表征，然后输入到双曲空间模型（HGCN）中，实现特征与模型的协同效应。
+本项目实现了一个用于蛋白质相互作用预测的现代化深度学习框架，以**蛋白质语言模型（PLM）为主通道**，结合**检索增强生成（RAG）**、**图小波多尺度分析**、**洛伦兹几何神经网络（可学习曲率）**和**家族条件LoRA**，实现高性能、可解释、工程可落地的PPI预测。
 
 ## 核心思想
 
-> **通过显式地构建层次化特征，与双曲空间模型的天然层次表达能力相匹配，实现 1+1 > 2 的协同效应。**
+> **在主干上"去MSA压力"（PLM + RAG），在几何/尺度上"强耦合"（图小波 × 洛伦兹GNN），用家族条件LoRA实现轻量专才化，达到性能、可解释性与工程效率的最佳平衡。**
 
-## 四步骤建模流程
+## 五步骤建模流程
 
-1. **进化信息编码 (PSSM)** - 使用PSI-BLAST获取蛋白质序列的进化保守性信息
-2. **多尺度层次提取 (小波变换)** - 对PSSM矩阵应用2D小波变换，提取不同尺度的保守性模式  
-3. **专家化模型 (MoE)** - 引入混合专家系统，针对不同蛋白质家族进行专门化处理
-4. **双曲空间图学习 (HGCN)** - 在双曲空间中学习整个PPI网络的拓扑结构
+1. **PLM主通道 (ESM-3)** - 序列-结构-功能统一表征，替代昂贵的PSSM
+2. **检索增强 (RAG-PLM)** - 用MMseqs2轻量检索同源序列，注入共进化信息
+3. **家族条件 LoRA** - 参数高效的专才化，替代重型MoE系统
+4. **图小波 (GWNN/SGWT)** - 显式编码多尺度邻域/分辨率信息
+5. **洛伦兹 GNN (可学习曲率)** - 在双曲空间中自适应学习层次拓扑结构
 
 ## 数据来源
 
-- **STRING数据库 v12.0** - 使用置信度 > 0.95 的高质量蛋白质相互作用数据
-- **跨物种数据** - 利用多物种信息增强模型的泛化能力
+**主要数据集：PRING基准测试** (NeurIPS 2025)
+- 标准化的PPI预测评估数据集
+- 4个精选物种：human（训练）, arath, yeast, ecoli（跨物种测试）
+- 已完成高质量预处理（序列过滤、负样本采样、图切分）
+- 多种网络拓扑采样策略：BFS, DFS, Random Walk
+- 拓扑+功能双重评估任务
+- 论文：[PRING: Rethinking PPI Prediction from Pairs to Graphs](https://arxiv.org/abs/2507.05101)
+
+**扩展数据（可选）：**
+- **STRING数据库 v12.0** - 可用于大规模预训练或数据增强
+- 24M+ 蛋白质，5,090 物种，多通道证据评分
 
 ## 环境配置
 
@@ -38,118 +48,189 @@ pip install -r requirements.txt
 
 - **数据处理**: pandas, numpy, scipy
 - **生物信息学**: biopython
-- **机器学习**: torch, torch-geometric, scikit-learn  
-- **信号处理**: pywt (小波变换)
+- **深度学习**: torch, torch-geometric, transformers
+- **蛋白质语言模型**: esm (ESM-2/ESM-3)
+- **同源检索**: mmseqs2（需单独安装）
+- **图小波**: pygsp 或自定义实现
+- **双曲几何**: geoopt（可选）
 - **网络请求**: requests
 - **进度显示**: tqdm
 
 ## 使用指南
 
-### 1. 数据提取
+### 1. 数据准备
 
-首先从STRING数据库提取高置信度的蛋白质相互作用数据：
+**PRING数据集已就绪**，位于 `data/PRING/data_process/pring_dataset/`
 
+数据集结构：
+```
+pring_dataset/
+├── human/              # 人类（训练集）
+│   ├── BFS/           # 广度优先采样切分
+│   │   ├── human_train_ppi.txt
+│   │   ├── human_val_ppi.txt
+│   │   ├── human_test_ppi.txt
+│   │   └── all_test_ppi.txt
+│   ├── DFS/           # 深度优先采样切分
+│   ├── RANDOM_WALK/   # 随机游走采样切分
+│   └── human_simple.fasta
+├── arath/             # 拟南芥（跨物种测试）
+├── yeast/             # 酵母（跨物种测试）
+└── ecoli/             # 大肠杆菌（跨物种测试）
+```
+
+**可选：STRING数据提取**（用于扩展训练数据）
 ```bash
 cd data_extraction
 python string_data_extractor.py
 ```
 
-这个脚本将：
-- 下载STRING v12.0的完整数据集
-- 筛选置信度 > 0.95 的相互作用
-- 提取蛋白质序列和注释信息
-- 将数据存储到SQLite数据库中
+### 2. ESM-3特征提取（即将实现）
 
-**输出文件**:
-- `data/string_data.db` - 包含所有数据的SQLite数据库
-- `data/` - 原始下载文件的缓存目录
-
-### 2. 进化信息编码（即将实现）
-
-使用PSI-BLAST生成PSSM矩阵：
+提取PLM序列表征：
 
 ```bash
 # 即将实现
-python pssm_generator.py
+python extract_esm_features.py
 ```
 
-### 3. 小波变换特征提取（即将实现）
+### 3. RAG同源检索（即将实现）
 
-```bash
-# 即将实现  
-python wavelet_feature_extractor.py
-```
-
-### 4. 混合专家系统（即将实现）
+使用MMseqs2检索同源序列：
 
 ```bash
 # 即将实现
-python moe_system.py
+python rag_retrieval.py
 ```
 
-### 5. HGCN模型训练（即将实现）
+### 4. 图小波特征（即将实现）
+
+在PPI图上应用多尺度小波变换：
 
 ```bash
 # 即将实现
-python train_hgcn.py
+python graph_wavelet_features.py
 ```
 
-## 数据统计示例
+### 5. 洛伦兹GNN训练（即将实现）
 
-提取完成后，你将看到类似如下的统计信息：
+训练带可学习曲率的双曲空间GNN：
 
+```bash
+# 即将实现
+python train_lorentz_gnn.py
 ```
-STRING数据提取完成！
-==================================================
-总蛋白质数量: 24,584,628
-总物种数量: 5,090
-高置信度相互作用: 8,926,434
-有序列的蛋白质: 24,584,628
 
-前10个物种的蛋白质数量:
-  物种 511145: 4,391 个蛋白质  # 大肠杆菌
-  物种 9606: 19,614 个蛋白质   # 人类
-  物种 83333: 4,391 个蛋白质   # 大肠杆菌 K-12
-  ...
-```
+## PRING数据集统计
+
+**Human (训练集)**
+- 蛋白质数量: ~19,000
+- 训练集PPI对: ~100,000+
+- 验证集PPI对: ~10,000+
+- 测试集PPI对: ~10,000+
+- 三种采样策略: BFS, DFS, Random Walk
+
+**跨物种测试集**
+- ARATH (拟南芥): ~5,000 蛋白质
+- YEAST (酵母): ~6,000 蛋白质  
+- ECOLI (大肠杆菌): ~4,000 蛋白质
+
+**质量保证**
+- 序列长度: 50-1000 氨基酸
+- 序列相似度过滤: <0.4 (MMseqs2)
+- 负样本采样: 拓扑驱动策略
+- 功能相似性过滤: 已完成
 
 ## 项目结构
 
 ```
 Hyperbolic_Big/
-├── docs/                              # 文档
-│   ├── hierarchical_feature_modeling_strategy.md
-│   ├── implementation_strategy.md  
-│   └── downstream_tasks_analysis.md
-├── data_extraction/                   # 数据提取模块
-│   └── string_data_extractor.py
-├── pssm_generation/                   # PSSM生成模块（即将实现）
-├── wavelet_features/                  # 小波特征提取模块（即将实现）  
-├── moe_system/                        # 混合专家系统模块（即将实现）
-├── hgcn_model/                        # HGCN模型模块（即将实现）
-├── requirements.txt                   # 依赖文件
+├── 📚 docs/                           # 文档
+│   ├── new_method.md                  # ⭐ 新方法核心（PLM+RAG+图小波+洛伦兹GNN）
+│   ├── plm_lora.md                    # 家族条件LoRA设计规范
+│   ├── pring_dataset.md               # PRING数据集使用指南
+│   ├── implementation_strategy.md     # HGCN数学推导与实现策略
+│   ├── data_acquisition_strategy.md   # 数据获取策略（STRING，可选）
+│   ├── downstream_tasks_analysis.md   # 下游任务分析
+│   └── old/                           # 旧版方法归档
+│
+├── 📦 data/                           # 数据
+│   └── PRING/                         # ⭐ PRING基准测试数据集（NeurIPS 2025）
+│       ├── data_process/pring_dataset/    # 主数据集
+│       │   ├── human/                     # 人类（训练）
+│       │   ├── arath/                     # 拟南芥（测试）
+│       │   ├── yeast/                     # 酵母（测试）
+│       │   └── ecoli/                     # 大肠杆菌（测试）
+│       ├── topology_task/                 # 拓扑任务评估
+│       ├── complex_pathway/               # 复合物通路评估
+│       ├── enrichment_analysis/           # GO富集分析
+│       └── essential_protein/             # 必需蛋白鉴定
+│
+├── ✅ data_loader/                    # PRING数据加载器（已实现）
+│   ├── __init__.py
+│   ├── config.py                      # 配置管理
+│   ├── pring_dataset.py               # Dataset类
+│   └── README.md                      # 使用文档
+│
+├── 📝 examples/                       # 使用示例
+│   └── load_pring_data.py             # 数据加载示例
+│
+├── 🔄 esm_features/                   # ESM特征提取（即将实现）
+├── 🔄 rag_retrieval/                  # RAG检索（即将实现）
+├── 🔄 graph_wavelet/                  # 图小波（即将实现）
+├── 🔄 family_lora/                    # 家族条件LoRA（即将实现）
+├── 🔄 lorentz_gnn/                    # 洛伦兹GNN（即将实现）
+│   ├── geometry/                      # 几何操作
+│   ├── layers/                        # GNN层
+│   └── models/                        # 完整模型
+├── 🔄 evaluation/                     # 评估模块（即将实现）
+│
+├── 📦 optional/                       # 可选扩展功能
+│   ├── data_extraction/               # STRING数据提取（可选）
+│   ├── data_preprocessing/            # STRING数据预处理（可选）
+│   └── README.md                      # 说明文档
+│
+├── requirements.txt                   # Python依赖
+├── test_data_loader.py                # 数据加载器测试
 └── README.md                          # 本文件
 ```
 
 ## 预期优势
 
-1. **性能提升** - 特征的内在层次性与模型的几何层次性完美匹配
-2. **可解释性增强** - 每个步骤都有明确的生物学意义
-3. **生物学先验融入** - 基于明确的生物学假设，具有更好的泛化能力
+1. **性能与可扩展性** - PLM主通道 + RAG注入共进化，较纯单序列更强，同时避免全量MSA昂贵代价
+2. **几何契合** - 图小波显式"尺度"，洛伦兹GNN承载"层级"，二者互补
+3. **工程友好** - 家族条件LoRA取代大MoE，参数效率与稳定性更佳
+4. **可解释性** - 同源检索权重 → 图小波尺度能量 → 洛伦兹半径/角坐标分布
+5. **成本控制** - 用MMseqs2（GPU加速）替代PSI-BLAST，用LoRA替代MoE
 
 ## 注意事项
 
-- **计算资源需求较大** - PSSM生成和大规模数据处理需要充足的计算资源
-- **存储空间需求** - STRING完整数据集较大，需要足够的存储空间
-- **网络连接** - 数据下载过程需要稳定的网络连接
+- **ESM模型规模** - ESM-3模型较大，建议使用GPU进行特征提取
+- **存储空间需求** - STRING完整数据集较大，需要足够的存储空间（~50GB）
+- **网络连接** - 数据下载和模型下载需要稳定的网络连接
+- **InterPro版本** - 固定InterProScan/InterPro版本号以保证可复现性
+- **数值稳定性** - 洛伦兹几何操作需要注意梯度裁剪和数值稳定性
 
 ## 下一步计划
 
-1. ✅ 完成STRING数据提取
-2. 🔄 实现PSSM生成模块  
-3. ⏳ 实现小波变换特征提取
-4. ⏳ 构建混合专家系统
-5. ⏳ 集成HGCN模型
+### 阶段一：数据与特征提取 ✅
+1. ✅ PRING基准测试数据集已就绪
+2. 🔄 实现PRING数据加载器（PyTorch Dataset）
+3. 🔄 实现ESM-3特征提取模块
+
+### 阶段二：核心模型组件
+4. ⏳ 实现RAG同源检索（MMseqs2集成）
+5. ⏳ 实现图小波多尺度特征（GWNN/SGWT）
+6. ⏳ 实现家族条件LoRA（InterPro/Pfam标注）
+7. ⏳ 实现洛伦兹几何核心（Lorentz流形操作）
+8. ⏳ 实现洛伦兹GNN层（可学习曲率）
+
+### 阶段三：训练与评估
+9. ⏳ 完整训练流程（Human数据，三种采样策略）
+10. ⏳ 拓扑任务评估（种内+跨物种）
+11. ⏳ 功能任务评估（复合物、GO富集、必需蛋白）
+12. ⏳ 消融实验（PLM vs PSSM, LoRA vs MoE, 图小波等）
+13. ⏳ 与PRING基线方法对比
 
 ## 贡献指南
 

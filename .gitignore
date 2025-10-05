@@ -1,1 +1,77 @@
-data/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Logs
+*.log
+logs/
+*.out
+
+# Data directories (keep structure, ignore large files)
+data/PRING/data_process/pring_dataset/*
+!data/PRING/data_process/pring_dataset/.gitkeep
+data/string_data.db
+data/*.gz
+data/*.txt
+data/*.fasta
+data/*.pkl
+
+# Model checkpoints and outputs
+checkpoints/
+models/*.pth
+models/*.pt
+outputs/
+results/
+wandb/
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+temp_*.txt
